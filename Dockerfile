@@ -36,8 +36,8 @@ RUN apt-get update && apt-get install -y \
 # Create a virtual environment
 RUN python3.9 -m venv .venv
 
-# Activate virtual environment and install build tool using pip in the venv
-RUN . .venv/bin/activate && pip install build
+# Activate virtual environment and install dependencies from requirements.txt
+RUN . .venv/bin/activate && pip install --no-cache-dir -r requirements.txt
 
 # Add and install cuDNN
 COPY cudnn-local-repo-ubuntu2204-8.9.5.29_1.0-1_amd64.deb /tmp
@@ -60,9 +60,6 @@ RUN git clone -b 'v19.22' --single-branch https://github.com/davisking/dlib.git 
     /app/.venv/bin/python setup.py install && \
     cd /app && \
     rm -rf dlib
-
-# Install other Python libraries using pip in the venv
-RUN .venv/bin/pip install opencv-python-headless numpy face_recognition
 
 # Move .venv to a temporary location
 RUN mv .venv /tmp/.venv_temp
