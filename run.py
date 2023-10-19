@@ -5,7 +5,8 @@ import argparse
 import cv2
 import face_recognition
 from tqdm import tqdm
-from sklearn.cluster import KMeans
+
+from sklearn.cluster import KMeans, DBSCAN
 
 
 def learn_from_images(directory, model):
@@ -110,11 +111,12 @@ def process_unknown_images(known_face_encodings, known_face_names, unknown_direc
                     shutil.move(image_path, os.path.join(person_directory, filename))
 
 
-def cluster_unknown_faces(unknown_folder, model, scale_factor):
+def cluster_unknown_faces(unknown_folder, model, scale_factor, clustering_algorithm="kmeans"):
     image_paths = [os.path.join(unknown_folder, f) for f in os.listdir(unknown_folder) if f.endswith('.png') or f.endswith('.jpg')]
     
     encodings = []
-    for image_path in image_paths:
+    print("Extracting encodings from images...")
+    for image_path in tqdm(image_paths, desc="Encoding"):
         image = face_recognition.load_image_file(image_path)
         
         image = cv2.resize(image, (0, 0), fx=scale_factor, fy=scale_factor)
@@ -124,11 +126,19 @@ def cluster_unknown_faces(unknown_folder, model, scale_factor):
             face_enc = face_recognition.face_encodings(image, face_locations)[0]
             encodings.append(face_enc)
 
-    n_clusters = max(1, len(encodings) // 5)
-    kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=0)
-    labels = kmeans.fit_predict(encodings)
+    print("\nPerforming clustering...")
+    if clustering_algorithm == "kmeans":
+        n_clusters = max(1, len(encodings) // 5)
+        clusterer = KMeans(n_clusters=n_clusters, n_init=10, random_state=0)
+    elif clustering_algorithm == "dbscan":
+        clusterer = DBSCAN(eps=0.5, min_samples=5)
+    else:
+        raise ValueError(f"Invalid clustering algorithm: {clustering_algorithm}")
 
-    for label, image_path in zip(labels, image_paths):
+    labels = clusterer.fit_predict(encodings)
+
+    print("\nOrganizing clustered images...")
+    for label, image_path in tqdm(zip(labels, image_paths), total=len(labels), desc="Organizing"):
         cluster_folder = os.path.join(unknown_folder, f"cluster_{label}")
         if not os.path.exists(cluster_folder):
             os.makedirs(cluster_folder)
@@ -147,9 +157,10 @@ def main():
     unknown_folder = "output/Unknown"
     image_format = ".jpg"
     scale_factor = 0.25
-    margin = 50
+    margin = 100
     fps = 5
     model = "cnn"
+    clustering_algorithm = "dbscan"
 
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
@@ -162,7 +173,7 @@ def main():
     elif args.mode == "image":
         process_unknown_images(known_face_encodings, known_face_names, model)
     elif args.mode == "cluster":
-        cluster_unknown_faces(unknown_folder, model, scale_factor)
+        cluster_unknown_faces(unknown_folder, model, scale_factor, clustering_algorithm)
 
 
 if __name__ == "__main__":
